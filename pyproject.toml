@@ -1,8 +1,31 @@
 [project]
-name = "ordering"
+name = "sync-resume"
 version = "0.1.0"
-description = "Add your description here"
+description = "A robust resume parser that extracts structured information from resumes and stores the data in both traditional databases and vector stores. With SyncResume, candidates’ skills, experience, and qualifications are indexed to quickly connect them to the most relevant job opportunities."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.115.8",
+    "fuzzywuzzy>=0.18.0",
+    "langchain-core>=0.3.35",
+    "langchain-openai>=0.3.6",
+    "langgraph>=0.2.73",
+    "pandas>=2.2.3",
+    "pillow>=11.1.0",
+    "psycopg2-binary>=2.9.10",
+    "pydantic[email]>=2.10.6",
+    "pymupdf>=1.25.3",
+    "python-dotenv>=1.0.1",
+    "python-levenshtein>=0.26.1",
+    "scikit-learn>=1.6.1",
+    "sqlalchemy>=2.0.38",
+    "uvicorn>=0.34.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+    "langchain-community>=0.3.17",
+    "openpyxl>=3.1.5",
+    "ruff>=0.9.6",
 ]

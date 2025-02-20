@@ -4,6 +4,9 @@ __pycache__/
 *$py.class
 .*cache/
 
+#Random working files
+/*.ipynb
+
 # C extensions
 *.so
 
