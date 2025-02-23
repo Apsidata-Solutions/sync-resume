@@ -1,74 +1,61 @@
+import logging
+import io
+import asyncio
+import time
+import json
+import uuid
 from dotenv import load_dotenv
 
-from fastapi import FastAPI
-import uvicorn
+import csv
+import pandas as pd
+import zipfile
+import fitz
+from typing import List, Tuple
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
+from langchain_core.documents import Document
 
-from loader import transformer_base64
-from schemas import Candidate
-from prompts import PARSE_PROMPT
+from fastapi import FastAPI
+from fastapi import Request, HTTPException
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import StreamingResponse
+import uvicorn
+from fastapi import File, UploadFile
+
+from src.loader import pdf_to_img64
+from src.schemas import TeachingCandidate 
+from src.prompts import PARSE_PROMPT
+from src.db import vectorstore
+
 app = FastAPI()
 
+logging.basicConfig(
+    filename=f'logs/app.log', 
+    level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
-# Candidate.model_dump()
 load_dotenv()
 
 
 llm = ChatOpenAI(model="gpt-4o", temperature=0)
-model =  PARSE_PROMPT | llm.with_structured_output(Candidate)
-
-from fastapi.responses import StreamingResponse
-import io
-import csv
-import pandas as pd
-from typing import List
-from fastapi import File, UploadFile
-
-@app.post("/batch-load")
-async def batch_load(zip_file: UploadFile = File(...)):
-    # Extract resumes from zip file
-    resumes = await extract_resumes_from_zip(zip_file)
-    
-    # Load each resume into a candidate object
-    candidates = []
-    for resume in resumes:
-        candidate = await load_resume(resume)
-        candidates.append(candidate)
-    
-    # Convert list of candidates to a dataframe
-    df = pd.DataFrame(candidates)
-    
-    # Convert dataframe to a CSV file
-    output = io.StringIO()
-    df.to_csv(output, index=False)
-    output.seek(0)
-    
-    return StreamingResponse(io.TextIOWrapper(output, newline=""), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=resumes.csv"})
-
-async def extract_resumes_from_zip(zip_file: UploadFile):
-    # TO DO: implement extracting resumes from zip file
-    pass
+model =  PARSE_PROMPT | llm.with_structured_output(TeachingCandidate)
 
 
-   
+def create_message(images:List[str], content:str | None = None) -> HumanMessage:
+    """
+    Create a single message with from a list of images with all pages' content
+    Args:
+        images (`List[str]`): list of base64 encoded images
+        content (`str | None`): Any additional content the user wants to add with the images. Defaults to `None`
+    Returns:
+        message: `HumanMessage` : Langchain `HumanMessage` interface with the images padded with the content or some sample content
+    """
 
-@app.post("/resume-loader", response_model=Candidate)
-async def load_resume(pdf_file):
-    # pdf_file ="data/CV for TGT/1 - Mahalakshmi jaiswal  - Primary teacher - 2 Yrs 7 Months.pdf"
-
-    b64_images = transformer_base64(pdf_file, save=False)
-    response = extract_candidate(b64_images)
-    return response    
-
-
-def extract_candidate(images: list[str]) -> Candidate:
-    # Create a single message with all pages
     content = [
         {
             "type": "text",
-            "text": "Extract all relevant information from these pages of the PDF. Provide a comprehensive analysis combining information from all pages.",
+            "text": content if content else "Extract all relevant information from these pages of the PDF. Provide a comprehensive analysis combining information from all pages.",
         }
     ]
 
@@ -80,18 +67,142 @@ def extract_candidate(images: list[str]) -> Candidate:
                 "image_url": {"url": f"data:image/png;base64,{page_image}"},
             }
         )
+    return HumanMessage(content=content)
 
-    # logger.info("Processing all PDF pages")
+@app.post("/resume", response_model=TeachingCandidate)
+async def load_resume(pdf_file: UploadFile = File(...)) -> TeachingCandidate:
+    if not pdf_file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="File is not a PDF.")
 
-    output = model.invoke({"messages": [HumanMessage(content=content)],"schema":Candidate.model_json_schema()})
-    # logger.info("Successfully processed PDF")
-    return output
+    logging.info("Starting to process resume")
+    pdf_bytes = await pdf_file.read()
+
+    b64_images = pdf_to_img64(fitz.open(stream=pdf_bytes, filename=pdf_file.filename), save=False)
+    logging.info("PDF converted to images successfully")
+
+    message = create_message(b64_images)
+    candidate = model.invoke({"messages": [message], "schema": TeachingCandidate.model_json_schema()})
+    logging.info("Successfully extracted candidate information")
+
+    try:
+        await vectorstore.aadd_documents([(Document(page_content=str(candidate), metadata=json.loads(candidate.model_dump_json())))])
+        logging.info("Successfully inserted candidate record")
+    except Exception as e:
+        logging.error(f"Failed to add document to vectorstore: {e}")
+        raise HTTPException(status_code=500, detail="Failed to add document to vectorstore", extra={"candidate": candidate})
+    
+    return candidate    
+
+@app.get("/resume/{resume_id}", )
+async def find_resume(resume_id:int) -> TeachingCandidate:
+    pass
+
+@app.patch("/resume/{resume_id}", )
+async def update_resume(resume_id:int) -> TeachingCandidate:
+    pass
+
+@app.delete("/resume/{resume_id}", )
+async def delete_resume(resume_id:int) -> None:
+    pass
+
+@app.post("/resume/batch")
+async def batch_load(zip_file: UploadFile) -> StreamingResponse:
+    """
+    Batch Process Resumes from ZIP File
+
+    This endpoint accepts a ZIP file containing one or more PDF resumes, 
+    extracts relevant candidate information, and returns a CSV file containing 
+    the extracted data.
+
+    Args:
+        zip_file (UploadFile): A ZIP file containing one or more PDF resumes.
+
+    Returns:
+        StreamingResponse: A CSV file containing the extracted candidate information.
+
+    Raises:
+        HTTPException: If the uploaded file is not a valid ZIP file, or unable to read it or parse the files.
+    """
+    
+    if not zip_file.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=422, detail="File is not a ZIP.")
+    
+    logging.info("Starting batch resume processing")
+    try:
+        zip_bytes = await zip_file.read()
+    except Exception as e:
+        logging.error(f"Failed to read ZIP file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to read ZIP file.")
+
+    zip_stream = io.BytesIO(zip_bytes)
+    pdf_files: List[Tuple[str, bytes]] = []
+    try:
+        with zipfile.ZipFile(zip_stream) as z:
+            for info in z.infolist():
+                # NOTE: Only process PDFs (ignoring Word docs for now)
+                if info.filename.lower().endswith(".pdf"):
+                    pdf_files.append((info.filename, z.read(info.filename)))
+    except zipfile.BadZipFile as e:
+        logging.error(f"Invalid ZIP file: {e}")
+        raise HTTPException(status_code=400, detail="Invalid ZIP file.")
+    except Exception as e:
+        logging.error(f"Failed to process ZIP file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process ZIP file.")
+
+    logging.info(f"Found {len(pdf_files)} PDF(s) in the zip file.")
+    inputs = []
+    for filename, pdf_bytes in pdf_files:
+        try:
+            b64_images = pdf_to_img64(fitz.open(stream=pdf_bytes, filename=filename),zoom=2, save=False)
+            logging.info(f"{filename} PDF converted to Images successfully")
+        except Exception as e:
+            logging.error(f"Failed to convert {filename} to images: {e}")
+            continue
+        inputs.append({"messages": [create_message(b64_images)], "schema": TeachingCandidate.model_json_schema()})
+
+    logging.info("Converted all PDFs into images. ATS Parsing all PDF files in a batch")
+    try:
+        outputs: list[TeachingCandidate] = await model.abatch(inputs)
+    except Exception as e:
+        logging.error(f"Failed to batch process PDFs to Form: {e}")
+        raise HTTPException(status_code=500, detail="Failed to batch parse PDFs.")
+    logging.info("Batch processing complete, upserting to vectorstor.")
+    tasks = [] 
+    for candidate in outputs:
+        tasks.append(vectorstore.aadd_documents([Document(
+            page_content=str(candidate),
+            metadata=json.loads(candidate.model_dump_json())
+        )]))
+
+    await asyncio.gather(*tasks)
+
+    logging.info("Added batch to vectorstore, converting to CSV file.")
+    candidate_dicts = [json.loads(candidate.model_dump_json()) if hasattr(candidate, "model_dump_json") else None for candidate in outputs]
+    df = pd.DataFrame(candidate_dicts)
+    csv_buffer = io.BytesIO()
+    df.to_csv(csv_buffer, index=False)
+    csv_buffer.seek(0)
+
+    logging.info("Added to vectorstore. Returning CSV file.")
+    
+    return StreamingResponse(
+        csv_buffer,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=Candidates.csv"}
+    )
+
 
 @app.get("/health")
-def health_check():
-    return {"status":"Healh Ok"}
-
-
+async def health_check(request: Request):
+    logging.info("Health check request received")
+    return {
+        "status": "UP",
+        "metadata": {
+            "request_ip": request.client.host,
+            "request_method": request.method,
+            "request_path": request.url.path
+        },
+    }
 
 if "__name__"=="__main__":
     uvicorn.run(app, host= "0.0.0.0", port=8000 )
