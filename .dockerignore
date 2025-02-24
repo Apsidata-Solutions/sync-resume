@@ -1,10 +1,15 @@
-# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 .*cache/
+.gitignore
+.ruff_cache/
 
-#Random working files
+#Github Files
+.git/
+.github/
+
+# Random working files
 *.ipynb
 
 # C extensions
@@ -39,6 +44,7 @@ MANIFEST
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
+logs/
 
 # PyBuilder
 .pybuilder/
@@ -85,7 +91,6 @@ __pypackages__/
 
 # Environments
 .env*
-!.env.example
 .venv
 env/
 venv/
@@ -166,4 +171,3 @@ celerybeat.pid
 
 temp/*
 data/
-data

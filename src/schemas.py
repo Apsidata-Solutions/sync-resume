@@ -3,7 +3,7 @@ from datetime import datetime, date
 import pandas as pd
 from typing import Optional, List, Literal
 from enum import Enum
-from pydantic import BaseModel, Field, EmailStr, field_validator
+from pydantic import BaseModel, Field, field_validator
 from db import engine
 
 def read_master(engine)->tuple:

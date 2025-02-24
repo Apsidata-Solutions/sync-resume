@@ -6,15 +6,14 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.8",
-    "fuzzywuzzy>=0.18.0",
     "langchain-core>=0.3.35",
+    "langchain-community>=0.3.17",
     "langchain-openai>=0.3.6",
     "langchain-postgres>=0.0.13",
     "langgraph>=0.2.73",
     "pandas>=2.2.3",
     "pillow>=11.1.0",
-    "psycopg>=3.2.5",
-    "psycopg2-binary>=2.9.10",
+    "psycopg[binary]>=3.2.5",
     "pydantic[email]>=2.10.6",
     "pymupdf>=1.25.3",
     "python-dotenv>=1.0.1",
@@ -27,8 +26,8 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "fuzzywuzzy>=0.18.0",
     "ipykernel>=6.29.5",
-    "langchain-community>=0.3.17",
     "openpyxl>=3.1.5",
     "ruff>=0.9.6",
 ]

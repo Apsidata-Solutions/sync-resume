@@ -1,9 +1,7 @@
 import logging
 import io
 import asyncio
-import time
 import json
-import uuid
 from dotenv import load_dotenv
 
 import pandas as pd
@@ -12,11 +10,10 @@ import fitz
 from typing import List, Tuple
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage
 from langchain_core.documents import Document
 
 from fastapi import APIRouter
-from fastapi import Request, HTTPException
+from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi import File, UploadFile
 
@@ -29,7 +26,7 @@ from src.graph import agent
 router = APIRouter(prefix="/resume", tags=["Resumes"])
 
 logging.basicConfig(
-    filename=f'logs/app.log', 
+    filename='logs/app.log', 
     level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s'
 )
 

@@ -8,7 +8,7 @@ PARSE_PROMPT=ChatPromptTemplate([
     ("placeholder","{messages}")
 ])
 
-SCHEMA_TEMPLATE=f"""You job is to read the given chain of messages and outptut a structured response 
+SCHEMA_TEMPLATE="""You job is to read the given chain of messages and outptut a structured response 
 that correctly and most accurately extracts the required candidates information, based off 
 the image as well as your obdervation understanding of it."""
 SCHEMA_PROMPT=ChatPromptTemplate([

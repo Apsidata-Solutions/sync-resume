@@ -4,7 +4,9 @@ FROM python:3.12-slim AS builder
 
 # (Optional) Install build tools if needed for compiling any dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
-    build-essential \
+    # build-essential \
+    iputils-ping \
+    vim \
     && rm -rf /var/lib/apt/lists/*
 
 # Install UV by copying its binaries from the official image
@@ -16,7 +18,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock* ./
 
 # Install your project's dependencies using UV.
-RUN uv sync --frozen --no-cache
+RUN uv sync --frozen --no-cache --no-dev
 
 # Copy the rest of your application code.
 COPY . .
@@ -41,4 +43,4 @@ EXPOSE 8000
 # USER appuser
 
 # Run the application using the uvicorn executable from the virtual environment.
-CMD ["./.venv/bin/uvicorn", "src.backend:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["./.venv/bin/uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

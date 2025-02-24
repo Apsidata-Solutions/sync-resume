@@ -1,13 +1,13 @@
 import logging
 
 from fastapi import FastAPI
-from fastapi import Request, HTTPException
+from fastapi import Request
 import uvicorn
 
 from resume import router
 
 logging.basicConfig(
-    filename=f'logs/app.log', 
+    filename='logs/app.log', 
     level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
