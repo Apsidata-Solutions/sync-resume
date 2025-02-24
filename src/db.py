@@ -9,7 +9,7 @@ engine = create_engine('postgresql+psycopg2://postgres:postgres@localhost:5432/p
 Session = sessionmaker(bind=engine)
 session = Session()
 
-embeddings = OpenAIEmbeddings()
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large", dimensions=3072)
 connection = create_async_engine("postgresql+psycopg://adit:Warmachinerox-123@localhost:6024/candidates")  # Uses psycopg3!
 collection_name = "education"
 
