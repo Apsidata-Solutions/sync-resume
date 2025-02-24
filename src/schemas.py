@@ -25,14 +25,27 @@ class PersonalInfo(BaseModel):
     prefix: Optional[str] = Field(description="Prefix used by the candidate, as it appears in their resume")
     first_name: str = Field(description="The first name of the candidate, exactly as it is written in their resume")
     last_name: Optional[str] = Field(description="The last name of the candidate, exactly as it is written in their resume. If not provided, it defaults to an empty string.")
-    date_of_birth: Optional[str] = Field(description="The date of birth of the candidate, if provided")
+    date_of_birth: Optional[str] = Field(description="The date of birth of the candidate, if provided in the DD-MM-YYYY format")
+    
+    @field_validator('date_of_birth')
+    @classmethod
+    def validate_date_of_birth(cls, v: Optional[str]) -> Optional[str]:
+        """
+        Validates the date of birth to ensure it is in the correct format (dd-mm-yyyy).
+        """
+        if v is not None:
+            try:
+                datetime.strptime(v, '%d-%m-%Y')
+            except ValueError:
+                raise ValueError("Incorrect date format, should be dd-mm-yyyy")
+        return v
 
 
 class PersonalDisclosure(BaseModel):
     gender: Optional[Literal["Male", "Female", "Non- Binary"]]
     # race: Optional[Literal["Asian", "White", "Black", "Native American", "Mixed", "Not Disclosed"]]
     # ethnicity: Optional[Literal["Hispanic", "Non- Hispanic", "Not Disclosed"]]
-    # nationality: str
+    # nationality: Optional[str]
 
 
 class Location(BaseModel):
@@ -56,7 +69,7 @@ class ContactInfo(BaseModel):
         # examples=["john.doe@example.com"]
     )
     mobile: str = Field(
-        description="The candidate's primary mobile phone number in international format with country code (e.g. +91-9876543210).",
+        description="The candidate's primary mobile phone number in international format with country code (e.g. +91-9876543210). If number only 10",
         # examples=["+91-9876543210", "+1-2345678900"]
     )
     alternate_email: Optional[str] = Field(
@@ -68,33 +81,33 @@ class ContactInfo(BaseModel):
         description="An alternative mobile number for the candidate in international format.",
     )
     
-    # @field_validator('mobile', 'alternate_mobile')
-    # @classmethod
-    # def validate_phone(cls, v: Optional[str]) -> Optional[str]:
-    #     """
-    #     Validates phone numbers to ensure they:
-    #     - Start with a + followed by 1-3 digits for country code
-    #     - Have a hyphen after country code
-    #     - Contain exactly 10 digits after the hyphen
-    #     """
-    #     if v is None:
-    #         return v
+    @field_validator('mobile', 'alternate_mobile')
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        """
+        Validates phone numbers to ensure they:
+        - Start with a + followed by 1-3 digits for country code
+        - Have a hyphen after country code
+        - Contain exactly 10 digits after the hyphen
+        """
+        if v is None:
+            return v
             
-    #     pattern = r'^\+\d{1,3}-\d{10}$'
-    #     if not re.match(pattern, v):
-    #         raise ValueError(
-    #             'Invalid phone number format. Must be in international format: '
-    #             '+[country code]-[10 digits] (e.g. +91-9876543210)'
-    #         )
+        pattern = r'^\+\d{1,3}-\d{10}$'
+        if not re.match(pattern, v):
+            raise ValueError(
+                'Invalid phone number format. Must be in international format: '
+                '+[country code]-[10 digits] (e.g. +91-9876543210)'
+            )
             
-    #     # Optional: Add specific country code validation if needed
-    #     country_code = v.split('-')[0][1:]  # Extract country code without +
-    #     if country_code == "91" and not v[4:].startswith(('6', '7', '8', '9')):
-    #         raise ValueError(
-    #             'Invalid Indian mobile number. Must start with 6, 7, 8, or 9'
-    #         )
+        # Optional: Add specific country code validation if needed
+        country_code = v.split('-')[0][1:]  # Extract country code without +
+        if country_code == "91" and not v[4:].startswith(('6', '7', '8', '9')):
+            raise ValueError(
+                'Invalid Indian mobile number. Must start with 6, 7, 8, or 9'
+            )
             
-    #     return v
+        return v
     
     @field_validator('email', 'alternate_email')
     @classmethod
@@ -134,32 +147,32 @@ class ContactInfo(BaseModel):
                 
         return v
     
-    # def clean_phone_number(self, phone: str) -> str:
-    #     """
-    #     Helper method to clean and standardize phone numbers.
-    #     """
-    #     # Remove all non-numeric characters except + and -
-    #     cleaned = ''.join(c for c in phone if c.isdigit() or c in '+-')
+    def clean_phone_number(self, phone: str) -> str:
+        """
+        Helper method to clean and standardize phone numbers.
+        """
+        # Remove all non-numeric characters except + and -
+        cleaned = ''.join(c for c in phone if c.isdigit() or c in '+-')
         
-    #     # Add + if missing
-    #     if not cleaned.startswith('+'):
-    #         cleaned = '+' + cleaned
+        # Add + if missing
+        if not cleaned.startswith('+'):
+            cleaned = '+' + cleaned
             
-    #     # Add - after country code if missing
-    #     if '-' not in cleaned:
-    #         country_code_end = 2 if cleaned.startswith('+91') else 2
-    #         cleaned = f"{cleaned[:country_code_end]}-{cleaned[country_code_end:]}"
+        # Add - after country code if missing
+        if '-' not in cleaned:
+            country_code_end = 2 if cleaned.startswith('+91') else 2
+            cleaned = f"{cleaned[:country_code_end]}-{cleaned[country_code_end:]}"
             
-    #     return cleaned
+        return cleaned
     
-    # def model_post_init(self, __context) -> None:
-    #     """
-    #     Post-initialization processing to clean phone numbers.
-    #     """
-    #     if self.mobile:
-    #         self.mobile = self.clean_phone_number(self.mobile)
-    #     if self.alternate_mobile:
-    #         self.alternate_mobile = self.clean_phone_number(self.alternate_mobile)
+    def model_post_init(self, __context) -> None:
+        """
+        Post-initialization processing to clean phone numbers.
+        """
+        if self.mobile:
+            self.mobile = self.clean_phone_number(self.mobile)
+        if self.alternate_mobile:
+            self.alternate_mobile = self.clean_phone_number(self.alternate_mobile)
 
 
 class Education(BaseModel):
@@ -212,6 +225,7 @@ class BaseCandidate(Location, ContactInfo, PersonalDisclosure, PersonalInfo, Bas
     education: Optional[List[Education]] = Field(default_factory=list, description="A comprehensive list of the candidate's format education AFTER high school.")
     experiences:Optional[List[Experience]] = Field(default_factory=list, description="A comprehensive list of the candidate's professional experiences in teaching or related fields.")
     
+    #TODO: Need to make this validator also, such that it checks that this date is after DOB
     @field_validator('career_start_date')
     def validate_date(cls, v):
         try:

@@ -3,6 +3,7 @@ from pathlib import Path
 from PIL import Image
 import fitz
 import io
+from langchain_core.messages import HumanMessage
 
 def pdfpath_to_img64(pdf_path: str, save: bool = False, zoom: int = 8) -> list[str]:
     """
@@ -58,3 +59,29 @@ def pdf_to_img64(pdf:fitz.Document, zoom:int =  8, save:bool=False, output_dir: 
 
     return base64_images
 
+def create_message(images:list[str], content:str | None = None) -> HumanMessage:
+    """
+    Create a single message with from a list of images with all pages' content
+    Args:
+        images (`list[str]`): list of base64 encoded images
+        content (`str | None`): Any additional content the user wants to add with the images. Defaults to `None`
+    Returns:
+        message: `HumanMessage` : Langchain `HumanMessage` interface with the images padded with the content or some sample content
+    """
+
+    content = [
+        {
+            "type": "text",
+            "text": content if content else "Extract all relevant information from these pages of the PDF. Provide a comprehensive analysis combining information from all pages.",
+        }
+    ]
+
+    # Add each page as an image
+    for page_num, page_image in enumerate(images):
+        content.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/png;base64,{page_image}"},
+            }
+        )
+    return HumanMessage(content=content)
