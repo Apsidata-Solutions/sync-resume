@@ -1,26 +1,40 @@
 import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from langchain_postgres.vectorstores import PGVector
-from langchain_openai import OpenAIEmbeddings
-from sqlalchemy.ext.asyncio import create_async_engine
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.engine import URL
 
-load_dotenv()
-#This is the engine for retrieval database. Only a placeholder for now. Ideally this should become same as vector DB
-engine = create_engine(f'postgresql+psycopg://postgres:postgres@{os.getenv('DATABASE_HOST')}:5432/postgres', echo=True)
+load_dotenv(".env")
+
+# Create the SQLAlchemy engine NOTE: Can't create a Vector DB since target is in SSMS
+engine = create_engine(
+    URL.create(
+        drivername=os.getenv('DATABASE_DRIVER'),
+        username=os.getenv('DATABASE_USERNAME'),
+        password= os.getenv('DATABASE_PASSWORD'),
+        host=os.getenv('DATABASE_HOST'),
+        database=os.getenv('DATABASE_NAME'),
+    ), 
+    echo=True
+)
+
 Session = sessionmaker(bind=engine)
 session = Session()
 
-embeddings = OpenAIEmbeddings(model="text-embedding-3-large", dimensions=3072)
-connection = create_async_engine(f"postgresql+psycopg://{os.getenv('DATABASE_USERNAME')}:{os.getenv('DATABASE_PASSWORD')}@{os.getenv('DATABASE_HOST')}:6024/{os.getenv('DATABASE_NAME')}")  # Uses psycopg3!
-collection_name = "education"
-
-# vector_store = InMemoryVectorStore(embedding=OpenAIEmbeddings())
-vectorstore = PGVector(
-    embeddings=embeddings,
-    collection_name=collection_name,
-    connection=connection,
-    use_jsonb=True,
-)
+# Optional test to verify connection
+def test_connection():
+    try:
+        with engine.connect() as connection:
+            query = input("Enter a query: ")
+            result = connection.execute(text(query))
+            for row in result:
+                print(f"\nResult: {row[0]}")
+            return True
+    except Exception as e:
+        print(f"\nError connecting to the database: {e}")
+        return False
+    
+# Run test connection only if this file is executed directly
+if __name__ == "__main__":
+    test_connection()
 

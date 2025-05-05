@@ -170,4 +170,5 @@ celerybeat.pid
 *.sage.py
 
 temp/*
-data/
+static/
+data

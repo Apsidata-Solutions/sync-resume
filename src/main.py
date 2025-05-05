@@ -3,20 +3,39 @@ import logging
 from fastapi import FastAPI
 from fastapi import Request
 import uvicorn
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-from resume import router
+from src.routes import resume_router
 
+# Configure root logger to output to both file and console
 logging.basicConfig(
-    filename='logs/app.log', 
-    level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(filename)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/app.log'),
+        logging.StreamHandler()
+    ]
 )
 
+# Get logger for this module
+logger = logging.getLogger(__name__)
+
 app = FastAPI()
-app.include_router(router)
+app.include_router(resume_router, prefix="/v1")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Or specify your frontend's URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/health")
 async def health_check(request: Request):
-    logging.info("Health check request received")
+    logger.info("Health check request received")
     return {
         "status": "UP",
         "metadata": {

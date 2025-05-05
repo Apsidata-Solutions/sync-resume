@@ -1,13 +1,20 @@
-# ------------------------- Builder Stage -------------------------
+FROM python:3.12-slim
 
-FROM python:3.12-slim AS builder
-
-# (Optional) Install build tools if needed for compiling any dependencies
+# Install necessary tools
 RUN apt-get update && apt-get install --no-install-recommends -y \
-    # build-essential \
     iputils-ping \
+    curl \
     vim \
     && rm -rf /var/lib/apt/lists/*
+
+# # Install uv and minimal ODBC dependencies in a single layer to keep the image lightweight
+# RUN apt-get update && apt-get install -y --no-install-recommends \
+#     gnupg \
+#     unixodbc \
+#     && curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
+#     && curl https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list \
+#     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 \
+#     && apt-get clean \
 
 # Install UV by copying its binaries from the official image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
@@ -22,15 +29,6 @@ RUN uv sync --frozen --no-cache --no-dev
 
 # Copy the rest of your application code.
 COPY . .
-
-
-# ------------------------- Runner Stage -------------------------
-FROM python:3.12-slim AS runner
-
-WORKDIR /app
-
-# Copy the built virtual environment and application source from the builder.
-COPY --from=builder /app /app
 
 # Ensure any log files (if present) have the proper permissions.
 RUN mkdir -p logs && touch logs/app.log && chmod -R 775 logs/app.log
