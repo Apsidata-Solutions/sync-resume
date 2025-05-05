@@ -26,5 +26,5 @@ jobs:
           context: .
           file: Dockerfile
           push: true
-          tags: ${{ vars.REGISTRY }}/${{ github.repository }}:${{ github.sha }}
+          tags: ${{ vars.REGISTRY }}/apsidata-solutions/sync-resume:${{ github.sha }}
             
