@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     iputils-ping \
     curl \
     vim \
+    libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # # Install uv and minimal ODBC dependencies in a single layer to keep the image lightweight
