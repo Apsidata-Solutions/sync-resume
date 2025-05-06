@@ -31,8 +31,10 @@ RUN uv sync --frozen --no-cache --no-dev
 # Copy the rest of your application code.
 COPY . .
 
-# Ensure any log files (if present) have the proper permissions.
+# Ensure any log and asset files (if present) have the proper permissions.
 RUN mkdir -p logs && touch logs/app.log && chmod -R 775 logs/app.log
+
+RUN mkdir -p static/resume && chmod -R 775 static/resume
 
 # Expose the port your FastAPI app listens on.
 EXPOSE 8000

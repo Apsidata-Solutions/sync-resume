@@ -1,3 +1,5 @@
+import os
+from dotenv import load_dotenv
 import logging
 
 from fastapi import FastAPI
@@ -8,15 +10,26 @@ from fastapi.staticfiles import StaticFiles
 
 from src.routes import resume_router
 
-# Configure root logger to output to both file and console
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(filename)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/app.log'),
-        logging.StreamHandler()
-    ]
-)
+# Configure root logger with different settings for production and development
+load_dotenv()
+
+if os.getenv("MODE", "DEVELOPMENT") == "PRODUCTION":
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(filename)s - %(message)s',
+        handlers=[
+            logging.FileHandler('logs/app.log'),
+        ]
+    )
+else:  # development mode
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(levelname)s - %(filename)s - %(message)s',
+        handlers=[
+            logging.FileHandler('logs/app.log'),
+            logging.StreamHandler()
+        ]
+    )
 
 # Get logger for this module
 logger = logging.getLogger(__name__)

@@ -5,8 +5,8 @@ from pydantic import BaseModel
 class ResumeUploadResponse(BaseModel):
     status: Literal["success", "failure", "cancelled", "pending", "processing"]
     id: Optional[str]
-    error: Optional[str] 
-    resume_url: Optional[str] 
+    error: Optional[str] = None
+    resume_url: Optional[str] = None
     candidate: Optional[TeachingCandidate] = None
 
 

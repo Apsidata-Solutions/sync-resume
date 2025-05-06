@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 
-#FIXME: Clean the database wrong wrong state name data
+#FIXME: Clean the database wrong state name data
 @router.post("/search")
 async def search_resume(query:str, filters:dict = None, confidence: float = 0.3)-> List[ResumeUploadResponse]:
     pass
@@ -66,96 +66,6 @@ async def get_resumes(ids: list[str]):
         media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename={zip_filename}"}
     )
-
-@router.post("/", response_model=ResumeUploadResponse)
-async def load_resume(id: Optional[str] = None, pdf_file: UploadFile = File(...)) -> ResumeUploadResponse:
-    if not id:
-        id = "cand-" + str(uuid.uuid4())
-        
-    if not pdf_file.filename.lower().endswith(".pdf"):
-        return ResumeUploadResponse(
-            status="failure",
-            id=id,
-            error="Unsupported file type. Only PDFs are accepted."
-        )
-    logger.info(f"Starting to process resume {id}")
-    try:
-        pdf_bytes = await pdf_file.read()
-        with open(f"./static/resume/{id}.pdf", "wb") as f:
-            f.write(pdf_bytes)
-    except Exception as e:
-        logger.error(f"Failed to read PDF file: {e}")
-        return ResumeUploadResponse(
-            status="failure",
-            id=id,
-            error="Failed to read PDF file."
-        )
-    
-    try:
-        b64_images = pdf_to_img64(fitz.open(stream=pdf_bytes, filename=pdf_file.filename), save=False)
-        logger.info("PDF converted to images successfully")
-    except Exception as e:
-        logger.error(f"Failed to convert PDF to images: {e}")
-        return ResumeUploadResponse(
-            status="failure",
-            id=id,
-            error="Failed to convert PDF to images."
-        )
-
-    try:
-        output = CandidateAgent.batch([{
-            "messages": [create_message(b64_images)], 
-            "schema": TeachingCandidate.model_json_schema(),
-            "id": id
-        }])[0]
-        if output.get("candidate"):
-            logger.info("Successfully extracted candidate information")
-        else:
-            logger.error(f"Failed to extract candidate information: {output.get('error')}")
-            return ResumeUploadResponse(
-                status="failure",
-                id=id,
-                error=f"Failed to extract information for candidate {output['id']} after {output['iteration']} iterations"
-            )
-    except Exception as e:
-        logger.error(f"Failed to extract candidate information: {e}")
-        return ResumeUploadResponse(
-            status="failure",
-            id=id,
-            error="Failed to extract candidate information."
-        )
-    
-    # try:
-    #     await vectorstore.aadd_documents([(
-    #         Document(
-    #             page_content=json.dumps(output["candidate"][-1]), 
-    #             metadata=output["candidate"][-1]
-    #         )
-    #     )])
-    #     logger.info("Successfully inserted candidate record")
-
-    # except Exception as e:
-    #     logger.warning(f"Failed to add document to vectorstore: {e}")
-    
-    return ResumeUploadResponse(
-        status="success",
-        id=output["id"], 
-        candidate=output["candidate"][-1], 
-        resume_url=f"/static/resume/{id}",
-        # resume=base64.b64encode(pdf_bytes).decode("utf-8")
-    ) 
-
-@router.get("/{resume_id}", )
-async def find_resume(resume_id:int) -> ResumeUploadResponse:
-    pass
-
-@router.patch("/{resume_id}", )
-async def update_resume(resume_id:int) -> ResumeUploadResponse:
-    pass
-
-@router.delete("/{resume_id}", )
-async def delete_resume(resume_id:int) -> None:
-    pass
 
 @router.post("/batch")
 async def batch_load(ids: Optional[List[str]] = None, zip_file: UploadFile = File(...)) -> List[ResumeUploadResponse]:
@@ -282,9 +192,145 @@ async def batch_load(ids: Optional[List[str]] = None, zip_file: UploadFile = Fil
         logger.error(f"Failed to create ResumeUploadResponse: {e}")
     return response
 
+@router.delete("/batch")
+async def delete_resumes(ids: list[str]):
+    """
+    Delete multiple resumes by their IDs
+    
+    Args:
+        ids (list[str]): List of resume IDs to delete
+        
+    Returns:
+        dict: Contains status for each resume ID and summary statistics
+    """
+    response = []
+    
+    for id in ids:
+        try:
+            if os.path.exists(f"./static/resume/{id}.pdf"):
+                os.remove(f"./static/resume/{id}.pdf")
+                response.append({
+                    "id": id, 
+                    "status": "success",
+                    "message": "Resume deleted successfully"
+                })
+            else:
+                logger.warning(f"Resume file not found: {id}")
+                response.append({
+                    "id": id, 
+                    "status": "failure",
+                    "message": "File not found"
+                })
+        except Exception as e:
+            logger.error(f"Failed to delete resume {id}: {str(e)}")
+            response.append({
+                "id": id, 
+                "status": "failure",
+                "message": f"Error deleting file: {str(e)}"
+            })
+    
+    return response
+
+@router.get("/{resume_id}", )
+async def find_resume(resume_id:int) :
+    return f"GET endpoint development in progress ID: {resume_id}"
+
+@router.patch("/{resume_id}", )
+async def update_resume(resume_id:int) :
+    return f"POST endpoint development in progress ID: {resume_id}"
+
+@router.delete("/{resume_id}", )
+async def delete_resume(resume_id:str):
+    try:
+        if os.path.exists(f"./static/resume/{resume_id}.pdf"):
+            os.remove(f"./static/resume/{resume_id}.pdf")
+        else:
+            logger.warning(f"Resume file not found: {resume_id}")
+            return {"id": resume_id, "status": "failure", "message": "Resume file not found"}
+    except Exception as e:
+        logger.error(f"Failed to delete resume: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete resume.")
+    return {"id": resume_id, "status": "success", "message": "Resume deleted successfully"}
+
+@router.post("/", response_model=ResumeUploadResponse)
+async def load_resume(id: Optional[str] = None, pdf_file: UploadFile = File(...)) -> ResumeUploadResponse:
+    if not id:
+        id = "cand-" + str(uuid.uuid4())
+        
+    if not pdf_file.filename.lower().endswith(".pdf"):
+        return ResumeUploadResponse(
+            status="failure",
+            id=id,
+            error="Unsupported file type. Only PDFs are accepted."
+        )
+    logger.info(f"Starting to process resume {id}")
+    try:
+        pdf_bytes = await pdf_file.read()
+        with open(f"./static/resume/{id}.pdf", "wb") as f:
+            f.write(pdf_bytes)
+    except Exception as e:
+        logger.error(f"Failed to read PDF file: {e}")
+        return ResumeUploadResponse(
+            status="failure",
+            id=id,
+            error="Failed to read PDF file."
+        )
+    
+    try:
+        b64_images = pdf_to_img64(fitz.open(stream=pdf_bytes, filename=pdf_file.filename), save=False)
+        logger.info("PDF converted to images successfully")
+    except Exception as e:
+        logger.error(f"Failed to convert PDF to images: {e}")
+        return ResumeUploadResponse(
+            status="failure",
+            id=id,
+            error="Failed to convert PDF to images."
+        )
+
+    try:
+        output = CandidateAgent.batch([{
+            "messages": [create_message(b64_images)], 
+            "schema": TeachingCandidate.model_json_schema(),
+            "id": id
+        }])[0]
+        if output.get("candidate"):
+            logger.info("Successfully extracted candidate information")
+        else:
+            logger.error(f"Failed to extract candidate information: {output.get('error')}")
+            return ResumeUploadResponse(
+                status="failure",
+                id=id,
+                error=f"Failed to extract information for candidate {output['id']} after {output['iteration']} iterations"
+            )
+    except Exception as e:
+        logger.error(f"Failed to extract candidate information: {e}")
+        return ResumeUploadResponse(
+            status="failure",
+            id=id,
+            error="Failed to extract candidate information."
+        )
+    
+    # try:
+    #     await vectorstore.aadd_documents([(
+    #         Document(
+    #             page_content=json.dumps(output["candidate"][-1]), 
+    #             metadata=output["candidate"][-1]
+    #         )
+    #     )])
+    #     logger.info("Successfully inserted candidate record")
+
+    # except Exception as e:
+    #     logger.warning(f"Failed to add document to vectorstore: {e}")
+    
+    return ResumeUploadResponse(
+        status="success",
+        id=output["id"], 
+        candidate=output["candidate"][-1], 
+        resume_url=f"/static/resume/{id}",
+    ) 
+
 @router.post("/cron/email")
 async def cron_job() -> List[TeachingCandidate]:
     """
-    
     """
     pass
