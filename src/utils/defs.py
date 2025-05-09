@@ -13,7 +13,7 @@ ROLES = [
 ]
 
 LEVELS = [
-    "Day Care", "Pre-Primary", "Primary (PRT)", "TGT", "PGT", "NA", "Other"
+    "Day Care", "Pre-Primary", "PRT", "TGT", "PGT", "NA", "Other"
 ]
 
 SKILLS = [
@@ -106,7 +106,7 @@ ROLE_MAPPING = {
 LEVEL_MAPPING = {
     r'\bday\s*care\b': 'Day Care',
     r'\b(pre\s*primary|nursery|kindergarten|kg|pre\s*school|montessori|playgroup)\b': 'Pre-Primary',
-    r'\b(prt|primary)\b': 'Primary (PRT)',
+    r'\b(prt|primary)\b': 'PRT',
     r'\btgt\b': 'TGT',
     r'\bpgt\b': 'PGT',
 }
@@ -229,3 +229,7 @@ SKILL_MAPPING = {
     r'\bmaintenance\b': 'Maintenance Management',
     r'\blaboratory\s*manage\b': 'Laboratory Management',
 }
+import pandas as pd
+from db import engine
+
+CITIES = pd.read_sql_query('SELECT c."Id", c."Name" as "name", s."Name" as "state" FROM "City" c JOIN "State" s ON s."Id"=c."StateId"', engine).set_index("Id")

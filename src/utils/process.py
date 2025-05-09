@@ -2,31 +2,33 @@
 import os
 import sys
 
-# Add the project root directory to the Python path
-# This needs to be done before any "src" imports
-sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+# sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
-#%%
 import time
 import random
 import io
 import asyncio
-import zipfile
-import httpx    
-import requests
-import pandas as pd
-from fastapi import UploadFile
+from pathlib import Path
 import argparse
 import logging
 
+import uuid
+import zipfile
+import pandas as pd
+import httpx    
+import requests
+from typing import Optional
+from pydantic import BaseModel
+
+from fastapi import UploadFile
+
 from src.routes.resume import batch_load
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 # Ensure logs directory exists before creating file handler
 # os.makedirs('logs', exist_ok=True)
-handler = logging.FileHandler('logs/app.log')
+handler = logging.FileHandler('logs/process.log')
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -37,7 +39,16 @@ logger.addHandler(stream_handler)
 
 logger.setLevel(logging.INFO)
 
-def get_unprocessed_files(input_dir:str, output_dir:str):
+class Batch(BaseModel):
+    id: str
+    status: bool
+    data: pd.DataFrame
+    
+    model_config = {
+        "arbitrary_types_allowed": True
+    }
+
+def get_unprocessed_files(input_dir:str = "data/preprocessed", output_dir:str = "data/processed") -> list[Batch]:
     """
     Identifies files in the input directory that are not yet in the output directory.
     Args:
@@ -78,42 +89,58 @@ def get_unprocessed_files(input_dir:str, output_dir:str):
 
     return batches
 
-def create_resume_zip(batch):
+def split(df:pd.DataFrame, batch_size:int = 80, save_dir:Optional[str] = None) -> list[Batch]:
+    """
+    Splits a dataframe into a list of batches of a given size. Optionally saves the batches to a directory.
+    """
+    try:
+        if "status" not in df.columns:  
+            logger.error("Status column not found in dataframe")
+            raise ValueError("Status column not found in dataframe. Cant split dataframe")
+        
+        logger.info(f"Splitting dataframe of size {df.shape[0]} into batches of size {batch_size}")
+        filtered_df = df[df["status"]==0]
+        batches = [Batch(id="batch-"+str(uuid.uuid4()), status=False, data=filtered_df.iloc[i:i+batch_size]) for i in range(0, len(filtered_df), batch_size)]
+        if save_dir:
+            for batch in batches:
+                if not os.path.exists(save_dir):
+                    logger.debug(f"Directory {save_dir} does not exist, creating it")
+                    os.makedirs(save_dir)
+
+                batch.data.to_csv(f"{save_dir}/{batch.id}.csv", index=False)
+                logger.debug(f"Saved batch {batch.id} to {save_dir}")
+        return batches
+    except Exception as e:
+        logger.error(f"Error splitting dataframe: {str(e)}")
+        return []
+
+def create_resume_zip(batch:pd.DataFrame):
     """
     Creates a ZIP file containing resumes downloaded from URLs.
     
     Args:
-        batch_urls (pd.Series): Series containing resume URLs
+        batch_urls (pd.DataFrame): DataFrame containing resume Id, URL and status
         
     Returns:
         UploadFile: FastAPI UploadFile object containing the zipped resumes
     """
+    required_columns = ["status", "resume", "id"]
+    for column in required_columns:
+        if column not in batch.columns:
+            logger.error(f"{column.capitalize()} column not found in batch")
+            return None, None
+    
     logger.info(f"Creating zip file for batch of {len(batch)} resumes")
     
     zip_buffer = io.BytesIO()
     ids = []
     with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
-        for id, url in zip(batch.id, batch.resume):
+        
+        for id, url, status in zip(batch.id, batch.resume, batch.status):
             fileName = url.split("/")[-1]
-            try:
-                name, ext = fileName.split(".")
-                logger.info(f"Processing file: {fileName}")
-            except:
-                name, ext = fileName, ""
-                logger.warning(f"Could not split filename {fileName} into name and extension")
-
-            # Get the resume content
-            try:
-                response = requests.get(url, timeout=10)
-                # Add PDF to zip file
-                zip_file.writestr(fileName, response.content)
-                ids.append(id)
-                logger.info(f"Successfully added {fileName} to zip")
-            except Exception as e:
-                logger.error(f"Error reading PDF from {url}: {str(e)}")
+            if status!=0:
+                logger.info(f"Skipping file {fileName} due to status {status}")
                 continue
-        for id, url in zip(batch.id, batch.resume):
-            fileName = url.split("/")[-1]
             try:
                 name, ext = fileName.split(".")
                 logger.info(f"Processing file: {fileName}")
@@ -158,9 +185,16 @@ async def acreate_resume_zip(batch):
     ids = []
     client = httpx.AsyncClient()
     
-    async def download_file(id, url):
+    async def download_file(id, url, status):
         """Helper function to download a single file"""
         fileName = url.split("/")[-1]
+        if status!=0:
+            logger.info(f"Skipping file {fileName} due to status {status}")
+            return {
+                'success': False,
+                'id': id,
+                'fileName': fileName
+            }
         try:
             name, ext = fileName.split(".")
             logger.info(f"Processing file: {fileName}")
@@ -286,7 +320,7 @@ async def main():
         
         # First try block - Create zip file
         try:
-            ids, zip_file = await acreate_resume_zip(batch["data"])
+            ids, zip_file = create_resume_zip(batch["data"])
             if len(ids)==0:
                 logger.warning(f"No valid resumes found in {batch['id']}, skipping...")
                 continue
