@@ -526,7 +526,7 @@ class DataNormalizer:
                 return None
                 
             # Check basic email validity
-            if not self.is_valid_email(email):
+            if not is_valid_email(email):
                 logger.warning(f"Invalid email format: {email}")
                 return email
             

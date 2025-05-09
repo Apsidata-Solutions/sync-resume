@@ -12,10 +12,10 @@ from typing import Optional, Dict, Tuple, Any, Union
 
 import pandas as pd
 
-from src.utils.normalizer import DataNormalizer
-from src.utils.extract import load_excel_data, validate_data, take_sample, prepare_dataframe
-from src.utils.transform import process_dataframe, generate_matching_report
-from src.utils.load import save_to_excel, save_report
+from .normalizer import DataNormalizer
+from .extract import load_excel_data, validate_data, take_sample, prepare_dataframe
+from .transform import process_dataframe, generate_matching_report
+from .load import save_to_excel, save_report
 
 # Configure logger
 # logger = configure_logger(__name__)
@@ -62,7 +62,7 @@ def test_sample(file_path: str, sample_size: int = 100, strategy: str = 'progres
             logger.error(f"Data validation failed: {missing_columns}")
             return None
         
-        prepared_df = prepare_dataframe(sample_df)
+        prepared_df = prepare_dataframe(df)
 
         # Take a sample
         sample_df = take_sample(prepared_df, sample_size)

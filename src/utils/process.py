@@ -377,7 +377,6 @@ async def main():
         logger.info(f"Batch {idx+1} processed successfully in {end_time - start_time:.2f} seconds\n")
         batch["data"].to_csv(f"data/processed/{batch['id']}.csv", index=False)
         
-    # Uncomment more code as needed
     logger.info("Main function executed successfully!")
 
 

@@ -13,7 +13,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 import pandas as pd
 
-from src.utils.normalizer import DataNormalizer, is_valid_mobile, is_valid_email
+from .normalizer import DataNormalizer, is_valid_mobile, is_valid_email
 
 # Configure logger
 logger = logging.getLogger(__name__)
