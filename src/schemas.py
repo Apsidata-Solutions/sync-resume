@@ -3,11 +3,12 @@ from typing import Literal, Optional
 from pydantic import BaseModel
 
 class ResumeUploadResponse(BaseModel):
-    status: Literal["success", "failure", "cancelled", "pending", "processing"]
-    id: Optional[str]
+    status: Literal["pending", "success", "failure", "cancelled", "processing"]
+    id: str
     error: Optional[str] = None
     resume_url: Optional[str] = None
     candidate: Optional[TeachingCandidate] = None
+    filename: Optional[str] = None
 
 
 class ResumeSearchResponse(BaseModel):

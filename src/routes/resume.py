@@ -105,6 +105,7 @@ async def batch_load(ids: Optional[List[str]] = None, zip_file: UploadFile = Fil
                 r = {
                     "id": id,
                     "resume_url": f"/static/resume/{id}.pdf",
+                    "filename": info.filename
                 }
                 with open("."+r["resume_url"], "wb") as f:
                     f.write(z.read(info.filename))

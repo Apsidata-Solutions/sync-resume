@@ -5,14 +5,15 @@ from typing import Optional, List, Literal
 from enum import Enum
 from pydantic import BaseModel, Field, field_validator
 from db import engine
+from sqlalchemy import Engine
 
-def read_master(engine)->tuple:
+def read_master(e: Engine)->tuple:
 
-    skills = pd.read_sql_query("SELECT Id, name FROM skills", engine).set_index("id")
-    roles = pd.read_sql_query("SELECT Id, name from roles", engine).set_index("id")
-    levels = pd.read_sql_query("SELECT Id, name from levels", engine).set_index("id")
-    cities = pd.read_sql_query("SELECT id, city as name from cities where country='India'", engine).set_index("id")
-    states = pd.read_sql_query("SELECT DISTINCT(admin_name) as name from cities where country='India'", engine)
+    skills = pd.read_sql_query("SELECT Id, Name as name FROM Skills", e).set_index("Id")
+    roles = pd.read_sql_query("SELECT Id, Name as name from Roles", e).set_index("Id")
+    levels = pd.read_sql_query("SELECT Id, Name as name from Level", e).set_index("Id")
+    cities = pd.read_sql_query("SELECT Id, Name as name from City", e).set_index("Id")
+    states = pd.read_sql_query("SELECT Id, Name as name from State", e).set_index("Id")
 
     # Create enums from the SQL query results
     skillEnum = Enum("Skill", {name:name for name in skills["name"].to_list()}) #roles["name"].to_dict()

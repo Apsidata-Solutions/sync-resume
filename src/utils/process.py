@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from fastapi import UploadFile
 
 from src.routes.resume import batch_load
-
+from src.schemas import ResumeUploadResponse
 logger = logging.getLogger(__name__)
 
 # Ensure logs directory exists before creating file handler
@@ -99,13 +99,42 @@ def split(df:pd.DataFrame, batch_size:int = 80, save_dir:Optional[str] = None) -
             raise ValueError("Status column not found in dataframe. Cant split dataframe")
         
         logger.info(f"Splitting dataframe of size {df.shape[0]} into batches of size {batch_size}")
+        batches = []
+
+        cancelled_df = df[df["status"]==3]
+        batches.append(Batch(id="batch-"+str(uuid.uuid4()), status=False, data=cancelled_df))
+        logger.info(f"Added batch {batches[-1].id} of size {cancelled_df.shape[0]}")
+
+        success_df = df[df["status"]==1]
+        batches.append(Batch(id="batch-"+str(uuid.uuid4()), status=False, data=success_df))
+        logger.info(f"Added batch {batches[-1].id} of size {success_df.shape[0]}")
+
+        failed_df = df[df["status"]==2]
+        batches.append(Batch(id="batch-"+str(uuid.uuid4()), status=False, data=failed_df))
+        logger.info(f"Added batch {batches[-1].id} of size {failed_df.shape[0]}")
+
         filtered_df = df[df["status"]==0]
-        batches = [Batch(id="batch-"+str(uuid.uuid4()), status=False, data=filtered_df.iloc[i:i+batch_size]) for i in range(0, len(filtered_df), batch_size)]
+        batches.extend([Batch(id="batch-"+str(uuid.uuid4()), status=True, data=filtered_df.iloc[i:i+batch_size]) for i in range(0, len(filtered_df), batch_size)])
+
         if save_dir:
             for batch in batches:
                 if not os.path.exists(save_dir):
                     logger.debug(f"Directory {save_dir} does not exist, creating it")
                     os.makedirs(save_dir)
+
+                if not os.path.exists(f"{save_dir}/../processed"):
+                    logger.debug(f"Directory {save_dir}/../processed does not exist, creating it")
+                    os.makedirs(f"{save_dir}/../processed")
+
+                if not batch.status:
+                    logger.warning(f"Batch {batch.id} is already processed, skipping")
+                    batch.data.to_csv(f"{save_dir}/{batch.id}.csv", index=False)
+                    batch.data.to_csv(f"{save_dir}/../processed/{batch.id}.csv", index=False)
+                    continue
+
+                if batch.data is None:
+                    logger.warning(f"Batch {batch.id} has no data, skipping")
+                    continue
 
                 batch.data.to_csv(f"{save_dir}/{batch.id}.csv", index=False)
                 logger.debug(f"Saved batch {batch.id} to {save_dir}")
@@ -114,7 +143,8 @@ def split(df:pd.DataFrame, batch_size:int = 80, save_dir:Optional[str] = None) -
         logger.error(f"Error splitting dataframe: {str(e)}")
         return []
 
-def create_resume_zip(batch:pd.DataFrame):
+
+def create_resume_zip(batch:pd.DataFrame) -> tuple[list[str], UploadFile]:
     """
     Creates a ZIP file containing resumes downloaded from URLs.
     
@@ -245,7 +275,7 @@ async def acreate_resume_zip(batch):
     return ids, zip_file
 
 
-def update_candidates_from_response(response, df):
+def update_candidates_from_response(response: ResumeUploadResponse, df:pd.DataFrame) -> pd.DataFrame:
     """Updates 'df' dataframe in-place with values from response
     
     Args:
@@ -253,7 +283,7 @@ def update_candidates_from_response(response, df):
         df: pandas DataFrame to update
         
     Returns:
-        None - updates df in-place
+        df: updated dataframe
     """
     # DataFrame is mutable so changes are made in-place
     for r in response:

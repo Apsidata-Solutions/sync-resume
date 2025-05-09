@@ -1,3 +1,4 @@
+#%%
 import os
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
@@ -14,6 +15,7 @@ engine = create_engine(
         password= os.getenv('DATABASE_PASSWORD'),
         host=os.getenv('DATABASE_HOST'),
         database=os.getenv('DATABASE_NAME'),
+        query={"driver": "ODBC Driver 18 for SQL Server", "TrustServerCertificate": "yes"}
     ), 
     echo=True
 )
